@@ -1,0 +1,474 @@
+#//////////////////////////////////////////////////////////////////////////////
+#Basic Settings
+#//////////////////////////////////////////////////////////////////////////////
+substitutions: #variables for name of our device
+  node_name: sonoff-nspanel-kitchen
+  device_name: Kitchen
+
+esphome: #device name for ESPHome UI
+  name: $node_name
+  comment: $device_name
+
+esp32: #type of board in Sonoff NSPanel
+  board: esp32dev
+
+wifi: #wifi connection, falllback AP etc settings
+  use_address: 10.0.0.197
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 0s #I dont want my device to reboot when it doesnt find the wifi network
+  ap: #when it doesnt find a wifi network, it creates its own hotspot
+    ssid: $device_name Fallback Hotspot
+    password: !secret wifi_ap_password
+    ap_timeout: 1min #default value in my case
+
+captive_portal: #when wifi connection fails You can connect device to another ap via web gui
+
+web_server: #enabling web gui on default port
+  port: 80
+
+logger: #enabling logging on DEBUG level
+
+uart: #screen handling
+  id: tf_uart
+  tx_pin: 16
+  rx_pin: 17
+  baud_rate: 115200
+
+api: #application programming interface settings, and other services 
+  encryption: 
+    key: !secret encryption_key
+  services:
+    - service: play_rtttl #with this you can play rtttl melodies from HA
+      variables:
+        song_str: string
+      then:
+        - rtttl.play:
+            rtttl: !lambda return song_str;
+
+    - service: upload_tft #so you can send a screen appearance (.tft) file
+      then:
+        - lambda: id(disp)->upload_tft();
+
+    - service: turn_off_screen #service that sets brightness to 0
+      then:
+        - lambda: id(disp).set_backlight_brightness(0);
+
+    - service: update_values #updating values to the screen
+      then:
+        - lambda: |-
+            id(disp).set_component_text("home.time", id(homeassistant_time).now().strftime("%H:%M").c_str());
+            id(disp).set_component_text("home.date", id(homeassistant_time).now().strftime("%d-%m-%Y").c_str());
+            id(disp).set_component_text("home.dayOfTheWeek", id(homeassistant_time).now().strftime("%A").c_str());
+            
+            id(disp).set_component_text_printf("home.tempdesk", "%.0f""\xb0""C", id(bedside_temperature).state);
+            id(disp).set_component_text_printf("home.humdesk", "%.0f""%%", id(bedside_humidity).state);
+            
+            id(disp).set_component_text_printf("home.tempout", "%.0f""\xb0""C", id(outside_temperature).state);
+
+            id(forecast_temperature_min_val) = id(forecast_temperature_min).state;
+            id(foreacast_temperature_max_val) = id(forecast_temperature_max).state;
+
+            id(bedside_temperature_val) = id(bedside_temperature).state;
+            id(bedside_humidity_val) = id(bedside_humidity).state;
+        - script.execute: update_screen_device
+        - script.execute: update_screen_bedside
+        - script.execute: update_screen_forecast_temp
+        - script.execute: update_screen_forecast_pres
+        - script.execute: update_screen_forecast_windsp
+        - script.execute: update_screen_forecast_hum
+        - script.execute: update_screen_precipitation_probability
+        - script.execute: update_screen_precipitation
+        - script.execute: get_icon
+ota: #enabling over-the-air updates (without authentication)
+
+time: #getting time from HA
+  - platform: homeassistant
+    id: homeassistant_time
+
+rtttl: #buzzer
+  id: buzzer
+  output: buzzer_out
+
+external_components: #github pull request for nextion screen handling
+  - source: github://pr#2956
+    components: [nextion]
+    refresh: 1h
+
+globals: #global variables
+  - id: forecast_temperature_min_val
+    type: float
+  - id: foreacast_temperature_max_val
+    type: float
+  - id: foreacast_pressure_val
+    type: float
+  - id: foreacast_wind_speed_val
+    type: float
+  - id: foreacast_humidity_val
+    type: float
+  - id: foreacast_precipitation_probability_val
+    type: float
+  - id: foreacast_precipitation_val
+    type: float
+
+  - id: isSun
+    type: bool
+
+  - id: device_temperature_val
+    type: float
+  - id: bedside_temperature_val
+    type: float 
+  - id: bedside_humidity_val
+    type: float 
+
+#//////////////////////////////////////////////////////////////////////////////
+#Switch Settings
+#//////////////////////////////////////////////////////////////////////////////
+
+binary_sensor: #left and right physical buttons, status state, and nextion screen touch buttons
+  - platform: gpio
+    name: $device_name Left Button
+    pin:
+      number: 14
+      inverted: true
+    on_click:
+      - light.toggle: light_1
+
+  - platform: gpio
+    name: $device_name Right Button
+    pin:
+      number: 27
+      inverted: true
+    #on_click:
+    #  - light.toggle: light_2
+
+  - platform: status
+    name: $device_name Status
+  
+  - platform: nextion
+    name: $device_name Home Touch Screen Button
+    page_id: 0
+    component_id: 19
+    on_press:
+      - light.toggle: light_1
+    
+  - platform: nextion
+    name: $device_name Sleep Touch Screen Button
+    page_id: 4
+    component_id: 3
+    on_press:
+      - light.turn_on: light_1
+      - rtttl.play: "pacman:d=4,o=5,b=112:32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32c6,32p,32c7,32p,32g6,32p,32e6,32p,32c7,32g6,16p,16e6,16p,32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32d#6,32e6,32f6,32p,32f6,32f#6,32g6,32p,32g6,32g#6,32a6,32p,32b.6"
+    
+output: #relays and buzzer power output
+  - platform: ledc
+    id: buzzer_out
+    pin:
+      number: 21
+    
+  - platform: gpio
+    id: relay_1
+    pin: 
+      number: 22
+
+  #- platform: gpio
+  #  id: relay_2
+  #  pin: 
+  #    number: 19
+
+button: #restart button
+  - platform: restart
+    name: Restart $device_name
+
+light: #relay -> light
+  - platform: binary
+    id: light_1
+    output: relay_1
+    name: $device_name Light 1
+    icon: mdi:lightbulb-spot
+    restore_mode: ALWAYS_OFF
+
+  #- platform: binary
+  #  id: light_2
+  #  output: relay_2
+  #  name: $device_name Light 2
+  #  icon: mdi:lightbulb-spot
+  #  restore_mode: ALWAYS_OFF
+
+switch: #screen power supply
+  # Pin 4 always needs to be on to power up the display
+  - platform: gpio
+    id: screen_power
+    entity_category: config
+    pin:
+      number: 4
+      inverted: true
+    restore_mode: ALWAYS_ON
+
+display: #screen settings
+  - platform: nextion
+    id: disp
+    uart_id: tf_uart
+    tft_url: http://10.0.0.3:8123/local/nspanel.tft #link to your .tft file
+    lambda: |-
+      it.set_component_text("home.time", id(homeassistant_time).now().strftime("%H:%M").c_str());
+      it.set_component_text("home.date", id(homeassistant_time).now().strftime("%d-%m-%Y").c_str());
+      it.set_component_text("home.dayOfTheWeek", id(homeassistant_time).now().strftime("%A").c_str());
+    on_setup:
+      then:
+        - rtttl.play: "twobits:d=4,o=5,b=220:c6,8g,8g,a,g,p,b,c6"
+        
+sensor: #physical and virtual sensors
+  - platform: wifi_signal #wifi signal sensor for HA
+    name: $device_name WiFi Signal
+    update_interval: 60s
+
+  - platform: ntc
+    id: temperature
+    sensor: resistance_sensor
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    name: $device_name Temperature
+    on_value:
+      then:
+        - lambda: id(disp).set_component_text_printf("tempin", "%.1f""\xb0""C", x);
+        - lambda: id(disp).send_command_printf("iconHome.pic=5");
+
+  - platform: resistance
+    id: resistance_sensor
+    sensor: ntc_source
+    configuration: DOWNSTREAM
+    resistor: 11.2kOhm
+
+  - platform: adc
+    id: ntc_source
+    pin: 38
+    update_interval: 60s
+    attenuation: 11db
+
+  - platform: homeassistant #get device temperature from HA
+    id: device_temperature
+    entity_id: sensor.kitchen_temperature
+    on_value:
+      then:
+        - lambda: id(device_temperature_val) = x;
+
+  - platform: homeassistant #get outside temperature from HA forecast
+    id: outside_temperature
+    entity_id: weather.dom
+    attribute: temperature
+    on_value:
+      then:
+        - lambda: id(disp).set_component_text_printf("home.tempout", "%.0f""\xb0""C", x);
+        
+  - platform: homeassistant #get inside temperature from HA
+    id: bedside_temperature
+    entity_id: sensor.bedside_temperature
+    on_value:
+      then:
+        - lambda: id(bedside_temperature_val) = x;
+        - script.execute: update_screen_bedside
+      
+  - platform: homeassistant #get inside humidity from HA
+    id: bedside_humidity
+    entity_id: sensor.bedside_humidity
+    on_value:
+      then:
+        - lambda: id(bedside_humidity_val) = x;
+        - script.execute: update_screen_bedside
+        
+  - platform: homeassistant #get today min temperature from HA forecast
+    id: forecast_temperature_min
+    entity_id: sensor.openweathermap_forecast_temperature_low
+    on_value:
+      then:
+        - lambda: id(forecast_temperature_min_val) = x;
+        - script.execute: update_screen_forecast_temp
+
+  - platform: homeassistant #get today max temperature from HA forecast
+    id: forecast_temperature_max
+    entity_id: sensor.openweathermap_forecast_temperature
+    on_value:
+      then:
+        - lambda: id(foreacast_temperature_max_val) = x;
+        - script.execute: update_screen_forecast_temp
+
+  - platform: homeassistant #get today pressure from HA forecast
+    id: forecast_pressure
+    entity_id: weather.dom
+    attribute: pressure
+    on_value:
+      then:
+        - lambda: id(foreacast_pressure_val) = x;
+        - script.execute: update_screen_forecast_pres
+
+  - platform: homeassistant #get today wind speed from HA forecast
+    id: forecast_wind_speed
+    entity_id: weather.dom
+    attribute: wind_speed
+    on_value:
+      then:
+        - lambda: id(foreacast_wind_speed_val) = x;
+        - script.execute: update_screen_forecast_windsp
+
+  - platform: homeassistant #get today humidity from HA
+    id: foreacast_humidity
+    entity_id: weather.dom
+    attribute: humidity
+    on_value:
+      then:
+        - lambda: id(foreacast_humidity_val) = x;
+        - script.execute: update_screen_forecast_hum
+
+  - platform: homeassistant #get today precipitation probability from HA forecast
+    id: foreacast_precipitation_probability
+    entity_id: sensor.openweathermap_forecast_precipitation_probability
+    on_value:
+      then:
+        - lambda: id(foreacast_precipitation_probability_val) = x;
+        - script.execute: update_screen_precipitation_probability
+
+  - platform: homeassistant #get today precipitation from HA forecast
+    id: foreacast_precipitation
+    entity_id: sensor.openweathermap_forecast_precipitation
+    on_value:
+      then:
+        - lambda: id(foreacast_precipitation_val) = x;
+        - script.execute: update_screen_precipitation
+   
+  - platform: nextion #send slider value to yeelight lamp
+    id: yeelight_slider
+    component_name: yeelight.slider
+    on_value:
+      then:
+        - homeassistant.service:
+            service: light.turn_on
+            data:
+              entity_id: light.yeelight_color_0x36db4e2
+              brightness: !lambda return (int)x;
+    
+  - platform: nextion #ringtone
+    id: ringtone
+    component_name: Down.alarm
+    on_value:
+      then:
+        - rtttl.play: "sus:d=4,o=5,b=210:2p,c6,d#6,f6,f#6,f6,d#6,c6,2p,8a#,8d6,c6,1p,c6,d#6,f6,f#6,f6,d#6,f#6,2p.,6f#6,6f6,6d#6,6f#6,6f6,6d#6"
+
+text_sensor:
+  - platform: homeassistant #get icon from HA
+    id: weather_icon
+    entity_id: weather.dom
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: return id(weather_icon).state == "clear night";
+            then:
+              lambda: id(disp).send_command_printf("home.iconWeather.pic=6");
+            else:
+              if: 
+                condition:
+                  lambda: return id(weather_icon).state == "cloudy";
+                then:
+                  lambda: id(disp).send_command_printf("home.iconWeather.pic=7");
+                else:
+                  if: 
+                    condition:
+                      lambda: return id(weather_icon).state == "fog";
+                    then:
+                      lambda: id(disp).send_command_printf("home.iconWeather.pic=8");
+                    else:
+                      if: 
+                        condition:
+                          lambda: return id(weather_icon).state == "lightning rainy";
+                        then:
+                          lambda: id(disp).send_command_printf("home.iconWeather.pic=9");
+                        else:
+                          if: 
+                            condition:
+                              lambda: return id(weather_icon).state == "partlycloudy";
+                            then:
+                              #lambda: id(disp).send_command_printf("home.iconWeather.pic=10");
+                              if:
+                                condition:
+                                  lambda: return id(whereIsSun).state == "below_horizon";
+                                then:
+                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=11");
+                                else:
+                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=10");
+                            else:
+                              if: 
+                                condition:
+                                  lambda: return id(weather_icon).state == "pouring";
+                                then:
+                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=12");
+                                else:
+                                  if: 
+                                    condition:
+                                      lambda: return id(weather_icon).state == "rainy";
+                                    then:
+                                      lambda: id(disp).send_command_printf("home.iconWeather.pic=13");
+                                    else:
+                                      if: 
+                                        condition:
+                                          lambda: return id(weather_icon).state == "snowy";
+                                        then:
+                                          lambda: id(disp).send_command_printf("home.iconWeather.pic=14");
+                                        else:
+                                          if: 
+                                            condition:
+                                              lambda: return id(weather_icon).state == "snowy_rainy";
+                                            then:
+                                              lambda: id(disp).send_command_printf("home.iconWeather.pic=15");
+                                            else:
+                                              if: 
+                                                condition:
+                                                  lambda: return id(weather_icon).state == "sunny";
+                                                then:
+                                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=16");
+                                                else:
+                                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=5");
+  - platform: homeassistant
+    id: whereIsSun
+    entity_id: sun.sun
+
+
+script:
+  - id: update_screen_device
+    then:
+      - lambda: id(disp).set_component_text_printf("home.tempin", "%.1f""\xb0""C", id(device_temperature_val));
+      - lambda: id(disp).send_command_printf("iconHome.pic=5");
+
+  - id: update_screen_bedside
+    then:
+      - lambda: id(disp).set_component_text_printf("home.bedside", "%.1f""\xb0""C   ""%.0f""%%", id(bedside_temperature_val), id(bedside_humidity_val));
+
+  - id: update_screen_forecast_temp
+    then:
+      - lambda: id(disp).set_component_text_printf("home.forecastTemp", "%.0f""\xb0""C  -  ""%.0f""\xb0""C", id(forecast_temperature_min_val), id(foreacast_temperature_max_val));
+  
+  - id: update_screen_forecast_pres
+    then:
+      - lambda: id(disp).set_component_text_printf("home.forecastPres", "%.0f""hPa", id(foreacast_pressure_val));
+
+  - id: update_screen_forecast_windsp
+    then:
+      - lambda: id(disp).set_component_text_printf("home.forecastWindSp", "%.1f""m/s", id(foreacast_wind_speed_val));
+    
+  - id: update_screen_forecast_hum
+    then:
+      - lambda: id(disp).set_component_text_printf("home.forecastHum", "%.0f""%%", id(foreacast_humidity_val));
+
+  - id: update_screen_precipitation_probability
+    then:
+      - lambda: id(disp).set_component_text_printf("home.forecastPrecCh", "%.0f""%%", id(foreacast_precipitation_probability_val));
+
+  - id: update_screen_precipitation
+    then:
+      - lambda: id(disp).set_component_text_printf("home.forecastPrec", "%.0f""mm", id(foreacast_precipitation_val));
+
+  - id: get_icon
+    then:
+      - lambda: id(weather_icon);
