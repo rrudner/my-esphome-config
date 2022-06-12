@@ -4,6 +4,7 @@
 substitutions:
   node_name: sonoff-pow-r2-server
   device_name: Server PCM
+  device_ip: 10.0.0.199
 
 esphome:
   name: $node_name
@@ -13,7 +14,7 @@ esp8266:
   board: esp8285
 
 wifi:
-  use_address: 10.0.0.199
+  use_address: $device_ip
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   reboot_timeout: 0s
@@ -58,8 +59,14 @@ binary_sensor:
       inverted: true
     id: button_1
     on_press:
+      - light.toggle: led_1
+    on_click:
+      min_length: 50ms
+      max_length: 1000ms
       then:
         - switch.toggle: relay_1
+    on_release:
+      - light.toggle: led_1
 
   - platform: status
     name: $device_name Status
@@ -76,10 +83,12 @@ button:
   - platform: restart
     name: $device_name Restart
 
-status_led:
-  pin:
-    number: GPIO13
-    inverted: true
+light:
+  - platform: status_led
+    id: led_1
+    pin: GPIO13
+    name: $device_name LED
+    icon: mdi:led-variant-on
 
 sensor:
   - platform: wifi_signal
@@ -87,18 +96,22 @@ sensor:
     update_interval: 60s
   - platform: cse7766
     current:
+      id: current
       name: $device_name Current
     voltage:
+      id: voltage
       name: $device_name Voltage
     power:
-      id: power_usage
+      id: power
       name: $device_name Power
     energy:
+      id: energy
       name: $device_name Energy
     update_interval: 60s
 
   - platform: total_daily_energy
-    power_id: power_usage
+    id: daily_energy_usage
+    power_id: power
     name: $device_name Total Daily Usage
 
 text_sensor:
