@@ -30,6 +30,9 @@ web_server: #enabling web gui on default port
 
 logger: #enabling logging on DEBUG level
 
+debug:
+  update_interval: 120s
+
 uart: #screen handling
   id: tf_uart
   tx_pin: 16
@@ -67,20 +70,17 @@ api: #application programming interface settings, and other services
             
             id(disp).set_component_text_printf("home.tempout", "%.0f""\xb0""C", id(outside_temperature).state);
 
-            id(forecast_temperature_min_val) = id(forecast_temperature_min).state;
-            id(foreacast_temperature_max_val) = id(forecast_temperature_max).state;
-
-            id(bedside_temperature_val) = id(bedside_temperature).state;
-            id(bedside_humidity_val) = id(bedside_humidity).state;
-        - script.execute: update_screen_device
-        - script.execute: update_screen_bedside
+        - script.execute: update_screen_device_temp
+        - script.execute: update_screen_bedside_temp
         - script.execute: update_screen_forecast_temp
         - script.execute: update_screen_forecast_pres
         - script.execute: update_screen_forecast_windsp
         - script.execute: update_screen_forecast_hum
         - script.execute: update_screen_precipitation_probability
         - script.execute: update_screen_precipitation
-        - script.execute: get_icon
+        - script.execute: set_weather_icon
+        - rtttl.play: "twobits:d=4,o=5,b=220:c6,8g,8g,a,g,p,b,c6"
+
 ota: #enabling over-the-air updates (without authentication)
 
 time: #getting time from HA
@@ -96,32 +96,6 @@ external_components: #github pull request for nextion screen handling
     components: [nextion]
     refresh: 1h
 
-globals: #global variables
-  - id: forecast_temperature_min_val
-    type: float
-  - id: foreacast_temperature_max_val
-    type: float
-  - id: foreacast_pressure_val
-    type: float
-  - id: foreacast_wind_speed_val
-    type: float
-  - id: foreacast_humidity_val
-    type: float
-  - id: foreacast_precipitation_probability_val
-    type: float
-  - id: foreacast_precipitation_val
-    type: float
-
-  - id: isSun
-    type: bool
-
-  - id: device_temperature_val
-    type: float
-  - id: bedside_temperature_val
-    type: float 
-  - id: bedside_humidity_val
-    type: float 
-
 #//////////////////////////////////////////////////////////////////////////////
 #Switch Settings
 #//////////////////////////////////////////////////////////////////////////////
@@ -132,7 +106,7 @@ binary_sensor: #left and right physical buttons, status state, and nextion scree
     pin:
       number: 14
       inverted: true
-    on_click:
+    on_press:
       - light.toggle: light_1
 
   - platform: gpio
@@ -210,16 +184,25 @@ display: #screen settings
   - platform: nextion
     id: disp
     uart_id: tf_uart
-    tft_url: http://10.0.0.3:8123/local/nspanel.tft #link to your .tft file
+    tft_url: http://10.0.0.3:8123/local/sonoff-nspanel-kitchen.tft #link to your .tft file
     lambda: |-
       it.set_component_text("home.time", id(homeassistant_time).now().strftime("%H:%M").c_str());
       it.set_component_text("home.date", id(homeassistant_time).now().strftime("%d-%m-%Y").c_str());
       it.set_component_text("home.dayOfTheWeek", id(homeassistant_time).now().strftime("%A").c_str());
     on_setup:
       then:
-        - rtttl.play: "twobits:d=4,o=5,b=220:c6,8g,8g,a,g,p,b,c6"
+        #- rtttl.play: "sus:d=4,o=5,b=210:2p,c6,d#6,f6,f#6,f6,d#6,c6,2p,8a#,8d6,c6,1p,c6,d#6,f6,f#6,f6,d#6,f#6,2p.,6f#6,6f6,6d#6,6f#6,6f6,6d#6" #long
+        - rtttl.play: "sus:d=4,o=5,b=210:2p,c6,d#6,f6,f#6,f6,d#6,c6,2p,8a#,8d6,c6,1p" #short
         
 sensor: #physical and virtual sensors
+  - platform: debug
+    free:
+      name: "Heap Free"
+    block:
+      name: "Heap Max Block"
+    loop_time:
+      name: "Loop Time"
+
   - platform: wifi_signal #wifi signal sensor for HA
     name: $device_name WiFi Signal
     update_interval: 60s
@@ -235,7 +218,7 @@ sensor: #physical and virtual sensors
     on_value:
       then:
         - lambda: id(disp).set_component_text_printf("tempin", "%.1f""\xb0""C", x);
-        - lambda: id(disp).send_command_printf("iconHome.pic=5");
+        - lambda: id(disp).send_command_printf("iconHome.pic=4");
 
   - platform: resistance
     id: resistance_sensor
@@ -252,91 +235,75 @@ sensor: #physical and virtual sensors
   - platform: homeassistant #get device temperature from HA
     id: device_temperature
     entity_id: sensor.kitchen_temperature
-    on_value:
-      then:
-        - lambda: id(device_temperature_val) = x;
 
-  - platform: homeassistant #get outside temperature from HA forecast
+  - platform: homeassistant #get outside temperature from HA (OpenWeatherMap)
     id: outside_temperature
-    entity_id: weather.dom
-    attribute: temperature
+    entity_id: sensor.openweathermap_temperature
     on_value:
       then:
         - lambda: id(disp).set_component_text_printf("home.tempout", "%.0f""\xb0""C", x);
         
-  - platform: homeassistant #get inside temperature from HA
+  - platform: homeassistant #get inside temperature from HA (sensor)
     id: bedside_temperature
     entity_id: sensor.bedside_temperature
     on_value:
       then:
-        - lambda: id(bedside_temperature_val) = x;
-        - script.execute: update_screen_bedside
+        - script.execute: update_screen_bedside_temp
       
-  - platform: homeassistant #get inside humidity from HA
+  - platform: homeassistant #get inside humidity from HA (sensor)
     id: bedside_humidity
     entity_id: sensor.bedside_humidity
     on_value:
       then:
-        - lambda: id(bedside_humidity_val) = x;
-        - script.execute: update_screen_bedside
+        - script.execute: update_screen_bedside_temp
         
-  - platform: homeassistant #get today min temperature from HA forecast
+  - platform: homeassistant #get today min temperature from HA (OpenWeatherMap) 
     id: forecast_temperature_min
     entity_id: sensor.openweathermap_forecast_temperature_low
     on_value:
       then:
-        - lambda: id(forecast_temperature_min_val) = x;
         - script.execute: update_screen_forecast_temp
 
-  - platform: homeassistant #get today max temperature from HA forecast
+  - platform: homeassistant #get today max temperature from HA (OpenWeatherMap)
     id: forecast_temperature_max
     entity_id: sensor.openweathermap_forecast_temperature
     on_value:
       then:
-        - lambda: id(foreacast_temperature_max_val) = x;
         - script.execute: update_screen_forecast_temp
 
-  - platform: homeassistant #get today pressure from HA forecast
+  - platform: homeassistant #get acctual pressure from HA (OpenWeatherMap)
     id: forecast_pressure
-    entity_id: weather.dom
-    attribute: pressure
+    entity_id: sensor.openweathermap_pressure
     on_value:
       then:
-        - lambda: id(foreacast_pressure_val) = x;
         - script.execute: update_screen_forecast_pres
 
-  - platform: homeassistant #get today wind speed from HA forecast
+  - platform: homeassistant #get acctual wind speed from HA (OpenWeatherMap)
     id: forecast_wind_speed
-    entity_id: weather.dom
-    attribute: wind_speed
+    entity_id: sensor.openweathermap_wind_speed
     on_value:
       then:
-        - lambda: id(foreacast_wind_speed_val) = x;
         - script.execute: update_screen_forecast_windsp
 
-  - platform: homeassistant #get today humidity from HA
-    id: foreacast_humidity
-    entity_id: weather.dom
-    attribute: humidity
+  - platform: homeassistant #get acctual humidity from HA (OpenWeatherMap)
+    id: forecast_humidity
+    entity_id: sensor.openweathermap_humidity
     on_value:
       then:
-        - lambda: id(foreacast_humidity_val) = x;
         - script.execute: update_screen_forecast_hum
 
-  - platform: homeassistant #get today precipitation probability from HA forecast
-    id: foreacast_precipitation_probability
+  - platform: homeassistant #get today precipitation probability from HA (OpenWeatherMap)
+    id: forecast_precipitation_probability
     entity_id: sensor.openweathermap_forecast_precipitation_probability
     on_value:
       then:
-        - lambda: id(foreacast_precipitation_probability_val) = x;
         - script.execute: update_screen_precipitation_probability
 
-  - platform: homeassistant #get today precipitation from HA forecast
-    id: foreacast_precipitation
+  - platform: homeassistant #get today precipitation from HA (OpenWeatherMap)
+    id: forecast_precipitation
     entity_id: sensor.openweathermap_forecast_precipitation
     on_value:
       then:
-        - lambda: id(foreacast_precipitation_val) = x;
         - script.execute: update_screen_precipitation
    
   - platform: nextion #send slider value to yeelight lamp
@@ -349,127 +316,159 @@ sensor: #physical and virtual sensors
             data:
               entity_id: light.yeelight_color_0x36db4e2
               brightness: !lambda return (int)x;
-    
-  - platform: nextion #ringtone
-    id: ringtone
-    component_name: Down.alarm
-    on_value:
-      then:
-        - rtttl.play: "sus:d=4,o=5,b=210:2p,c6,d#6,f6,f#6,f6,d#6,c6,2p,8a#,8d6,c6,1p,c6,d#6,f6,f#6,f6,d#6,f#6,2p.,6f#6,6f6,6d#6,6f#6,6f6,6d#6"
 
 text_sensor:
-  - platform: homeassistant #get icon from HA
+  - platform: debug
+    device:
+      name: "Device Info"
+
+  - platform: homeassistant #get weather icon from HA (OpenWeatherMap)
     id: weather_icon
-    entity_id: weather.dom
+    entity_id: weather.openweathermap
     on_value:
       then:
-        - if:
-            condition:
-              lambda: return id(weather_icon).state == "clear night";
-            then:
-              lambda: id(disp).send_command_printf("home.iconWeather.pic=6");
-            else:
-              if: 
-                condition:
-                  lambda: return id(weather_icon).state == "cloudy";
-                then:
-                  lambda: id(disp).send_command_printf("home.iconWeather.pic=7");
-                else:
-                  if: 
-                    condition:
-                      lambda: return id(weather_icon).state == "fog";
-                    then:
-                      lambda: id(disp).send_command_printf("home.iconWeather.pic=8");
-                    else:
-                      if: 
-                        condition:
-                          lambda: return id(weather_icon).state == "lightning rainy";
-                        then:
-                          lambda: id(disp).send_command_printf("home.iconWeather.pic=9");
-                        else:
-                          if: 
-                            condition:
-                              lambda: return id(weather_icon).state == "partlycloudy";
-                            then:
-                              #lambda: id(disp).send_command_printf("home.iconWeather.pic=10");
-                              if:
-                                condition:
-                                  lambda: return id(whereIsSun).state == "below_horizon";
-                                then:
-                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=11");
-                                else:
-                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=10");
-                            else:
-                              if: 
-                                condition:
-                                  lambda: return id(weather_icon).state == "pouring";
-                                then:
-                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=12");
-                                else:
-                                  if: 
-                                    condition:
-                                      lambda: return id(weather_icon).state == "rainy";
-                                    then:
-                                      lambda: id(disp).send_command_printf("home.iconWeather.pic=13");
-                                    else:
-                                      if: 
-                                        condition:
-                                          lambda: return id(weather_icon).state == "snowy";
-                                        then:
-                                          lambda: id(disp).send_command_printf("home.iconWeather.pic=14");
-                                        else:
-                                          if: 
-                                            condition:
-                                              lambda: return id(weather_icon).state == "snowy_rainy";
-                                            then:
-                                              lambda: id(disp).send_command_printf("home.iconWeather.pic=15");
-                                            else:
-                                              if: 
-                                                condition:
-                                                  lambda: return id(weather_icon).state == "sunny";
-                                                then:
-                                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=16");
-                                                else:
-                                                  lambda: id(disp).send_command_printf("home.iconWeather.pic=5");
+        - script.execute: set_weather_icon
+                                  
   - platform: homeassistant
     id: whereIsSun
     entity_id: sun.sun
 
-
 script:
-  - id: update_screen_device
+  - id: update_screen_device_temp
     then:
-      - lambda: id(disp).set_component_text_printf("home.tempin", "%.1f""\xb0""C", id(device_temperature_val));
-      - lambda: id(disp).send_command_printf("iconHome.pic=5");
+      - lambda: id(disp).set_component_text_printf("home.tempin", "%.1f""\xb0""C", id(device_temperature).state);
+      - lambda: id(disp).send_command_printf("iconHome.pic=4");
 
-  - id: update_screen_bedside
+  - id: update_screen_bedside_temp
     then:
-      - lambda: id(disp).set_component_text_printf("home.bedside", "%.1f""\xb0""C   ""%.0f""%%", id(bedside_temperature_val), id(bedside_humidity_val));
+      - lambda: id(disp).set_component_text_printf("home.bedside", "%.1f""\xb0""C   ""%.0f""%%", id(bedside_temperature).state, id(bedside_humidity).state);
 
   - id: update_screen_forecast_temp
     then:
-      - lambda: id(disp).set_component_text_printf("home.forecastTemp", "%.0f""\xb0""C  -  ""%.0f""\xb0""C", id(forecast_temperature_min_val), id(foreacast_temperature_max_val));
+      - lambda: id(disp).set_component_text_printf("home.forecastTemp", "%.0f""\xb0""C  -  ""%.0f""\xb0""C", id(forecast_temperature_min).state, id(forecast_temperature_max).state);
   
   - id: update_screen_forecast_pres
     then:
-      - lambda: id(disp).set_component_text_printf("home.forecastPres", "%.0f""hPa", id(foreacast_pressure_val));
+      - lambda: id(disp).set_component_text_printf("home.forecastPres", "%.0f""hPa", id(forecast_pressure).state);
 
   - id: update_screen_forecast_windsp
     then:
-      - lambda: id(disp).set_component_text_printf("home.forecastWindSp", "%.1f""m/s", id(foreacast_wind_speed_val));
+      - lambda: id(disp).set_component_text_printf("home.forecastWindSp", "%.1f""m/s", id(forecast_wind_speed).state);
     
   - id: update_screen_forecast_hum
     then:
-      - lambda: id(disp).set_component_text_printf("home.forecastHum", "%.0f""%%", id(foreacast_humidity_val));
+      - lambda: id(disp).set_component_text_printf("home.forecastHum", "%.0f""%%", id(forecast_humidity).state);
 
   - id: update_screen_precipitation_probability
     then:
-      - lambda: id(disp).set_component_text_printf("home.forecastPrecCh", "%.0f""%%", id(foreacast_precipitation_probability_val));
+      - lambda: id(disp).set_component_text_printf("home.forecastPrecCh", "%.0f""%%", id(forecast_precipitation_probability).state);
 
   - id: update_screen_precipitation
     then:
-      - lambda: id(disp).set_component_text_printf("home.forecastPrec", "%.0f""mm", id(foreacast_precipitation_val));
+      - lambda: id(disp).set_component_text_printf("home.forecastPrec", "%.0f""mm", id(forecast_precipitation).state);
 
-  - id: get_icon
+  - id: set_weather_icon
     then:
-      - lambda: id(weather_icon);
+      - if:
+          condition:
+            lambda: return id(weather_icon).state == "clear-night";
+          then:
+            lambda: id(disp).send_command_printf("home.iconWeather.pic=6");
+          else:
+            if: 
+              condition:
+                lambda: return id(weather_icon).state == "cloudy";
+              then:
+                lambda: id(disp).send_command_printf("home.iconWeather.pic=7");
+              else:
+                if: 
+                  condition:
+                    lambda: return id(weather_icon).state == "exceptional";
+                  then:
+                    lambda: id(disp).send_command_printf("home.iconWeather.pic=8");
+                  else:
+                    if: 
+                      condition:
+                        lambda: return id(weather_icon).state == "fog";
+                      then:
+                        lambda: id(disp).send_command_printf("home.iconWeather.pic=9");
+                      else:
+                        if: 
+                          condition:
+                            lambda: return id(weather_icon).state == "hail";
+                          then:
+                            lambda: id(disp).send_command_printf("home.iconWeather.pic=10");
+                          else:
+                            if: 
+                              condition:
+                                lambda: return id(weather_icon).state == "lightning";
+                              then:
+                                lambda: id(disp).send_command_printf("home.iconWeather.pic=11");
+                              else:
+                                if: 
+                                  condition:
+                                    lambda: return id(weather_icon).state == "lightning-rainy";
+                                  then:
+                                    lambda: id(disp).send_command_printf("home.iconWeather.pic=12");
+                                  else:
+                                    if: 
+                                      condition:
+                                        lambda: return id(weather_icon).state == "partlycloudy";
+                                      then:
+                                        if:
+                                          condition:
+                                            lambda: return id(whereIsSun).state == "above_horizon";
+                                          then:
+                                            lambda: id(disp).send_command_printf("home.iconWeather.pic=13");
+                                          else:
+                                            lambda: id(disp).send_command_printf("home.iconWeather.pic=14");
+                                      else:
+                                        if: 
+                                          condition:
+                                            lambda: return id(weather_icon).state == "pouring";
+                                          then:
+                                            lambda: id(disp).send_command_printf("home.iconWeather.pic=15");
+                                          else:
+                                            if: 
+                                              condition:
+                                                lambda: return id(weather_icon).state == "rainy";
+                                              then:
+                                                lambda: id(disp).send_command_printf("home.iconWeather.pic=16");
+                                              else:
+                                                if: 
+                                                  condition:
+                                                    lambda: return id(weather_icon).state == "snowy";
+                                                  then:
+                                                    lambda: id(disp).send_command_printf("home.iconWeather.pic=17");
+                                                  else:
+                                                    if: 
+                                                      condition:
+                                                        lambda: return id(weather_icon).state == "snowy";
+                                                      then:
+                                                        lambda: id(disp).send_command_printf("home.iconWeather.pic=17");
+                                                      else:
+                                                        if: 
+                                                          condition:
+                                                            lambda: return id(weather_icon).state == "snowy-rainy";
+                                                          then:
+                                                            lambda: id(disp).send_command_printf("home.iconWeather.pic=18");
+                                                          else:
+                                                            if: 
+                                                              condition:
+                                                                lambda: return id(weather_icon).state == "sunny";
+                                                              then:
+                                                                lambda: id(disp).send_command_printf("home.iconWeather.pic=19");
+                                                              else:
+                                                                if: 
+                                                                  condition:
+                                                                    lambda: return id(weather_icon).state == "windy";
+                                                                  then:
+                                                                    lambda: id(disp).send_command_printf("home.iconWeather.pic=20");
+                                                                  else:
+                                                                    if: 
+                                                                      condition:
+                                                                        lambda: return id(weather_icon).state == "windy-variant";
+                                                                      then:
+                                                                        lambda: id(disp).send_command_printf("home.iconWeather.pic=21");
+                                                                      else:
+                                                                        lambda: id(disp).send_command_printf("home.iconWeather.pic=23");

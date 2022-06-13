@@ -31,6 +31,9 @@ web_server:
 logger:
   baud_rate: 0
 
+debug:
+  update_interval: 120s
+
 uart:
   rx_pin: RX
   baud_rate: 4800
@@ -62,7 +65,7 @@ binary_sensor:
       - light.toggle: led_1
     on_click:
       min_length: 50ms
-      max_length: 1000ms
+      max_length: 350ms
       then:
         - switch.toggle: relay_1
     on_release:
@@ -106,14 +109,31 @@ sensor:
       name: $device_name Power
     energy:
       id: energy
+      filters:
+        - multiply: 0.001
+      unit_of_measurement: kWh
       name: $device_name Energy
     update_interval: 60s
 
   - platform: total_daily_energy
     id: daily_energy_usage
     power_id: power
+    filters:
+      - multiply: 0.001
+    unit_of_measurement: kWh
     name: $device_name Total Daily Usage
 
+  - platform: debug
+    free:
+      name: "Heap Free"
+    fragmentation:
+      name: "Heap Fragmentation"
+    block:
+      name: "Heap Max Block"
+    loop_time:
+      name: "Loop Time"
+
 text_sensor:
-  - platform: version
-    name: $device_name ESPHome Version
+  - platform: debug
+    device:
+      name: "Device Info"

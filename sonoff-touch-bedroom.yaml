@@ -11,7 +11,7 @@ esphome:
   comment: $device_name
 
 esp8266:
-  board: esp01_1m
+  board: esp8285
 
 wifi:
   use_address: $device_ip
@@ -29,6 +29,9 @@ web_server:
   port: 80
 
 logger:
+
+debug:
+  update_interval: 120s
 
 api:
   encryption: 
@@ -55,11 +58,7 @@ binary_sensor:
     id: button_1
     on_press:
       - light.toggle: led_1
-    on_click:
-      min_length: 50ms
-      max_length: 1000ms
-      then:
-        - light.toggle: light_1
+      - light.toggle: light_1
     on_release:
       - light.toggle: led_1
 
@@ -93,3 +92,18 @@ sensor:
   - platform: wifi_signal
     name: $device_name WiFi Signal
     update_interval: 60s
+    
+  - platform: debug
+    free:
+      name: "Heap Free"
+    fragmentation:
+      name: "Heap Fragmentation"
+    block:
+      name: "Heap Max Block"
+    loop_time:
+      name: "Loop Time"
+
+text_sensor:
+  - platform: debug
+    device:
+      name: "Device Info"
