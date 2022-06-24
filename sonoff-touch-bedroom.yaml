@@ -34,6 +34,7 @@ debug:
   update_interval: 120s
 
 api:
+  reboot_timeout: 0s
   encryption: 
     key: !secret encryption_key
 

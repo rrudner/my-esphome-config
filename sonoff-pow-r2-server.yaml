@@ -97,6 +97,7 @@ sensor:
   - platform: wifi_signal
     name: $device_name WiFi Signal
     update_interval: 60s
+    
   - platform: cse7766
     current:
       id: current
@@ -113,7 +114,7 @@ sensor:
         - multiply: 0.001
       unit_of_measurement: kWh
       name: $device_name Energy
-    update_interval: 60s
+    update_interval: 20s
 
   - platform: total_daily_energy
     id: daily_energy_usage
