@@ -39,6 +39,7 @@ uart:
   baud_rate: 4800
 
 api:
+  reboot_timeout: 0s
   encryption: 
     key: !secret encryption_key
 
