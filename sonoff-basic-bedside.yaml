@@ -59,9 +59,13 @@ binary_sensor:
     id: button_1
     on_press:
       - light.toggle: led_1
-      - light.toggle: light_1
     on_release:
       - light.toggle: led_1
+    on_click:
+      min_length: 50ms
+      max_length: 1000ms
+      then:
+        - light.toggle: light_1
 
   - platform: status
     name: $device_name Status
@@ -97,23 +101,23 @@ sensor:
   - platform: dht
     pin: GPIO3
     temperature:
-      name: "$device_name Temperature"
+      name: $device_name Temperature
     humidity:
-      name: "$device_name Humidity"
+      name: $device_name Humidity
     model: DHT22
     update_interval: 60s
 
   - platform: debug
     free:
-      name: "Heap Free"
+      name: $device_name Heap Free
     fragmentation:
-      name: "Heap Fragmentation"
+      name: $device_name Heap Fragmentation
     block:
-      name: "Heap Max Block"
+      name: $device_name Heap Max Block
     loop_time:
-      name: "Loop Time"
+      name: $device_name Loop Time
 
 text_sensor:
   - platform: debug
     device:
-      name: "Device Info"
+      name: $device_name Device Info

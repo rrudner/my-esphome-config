@@ -96,15 +96,15 @@ sensor:
     
   - platform: debug
     free:
-      name: "Heap Free"
+      name: $device_name Heap Free
     fragmentation:
-      name: "Heap Fragmentation"
+      name: $device_name Heap Fragmentation
     block:
-      name: "Heap Max Block"
+      name: $device_name Heap Max Block
     loop_time:
-      name: "Loop Time"
+      name: $device_name Loop Time
 
 text_sensor:
   - platform: debug
     device:
-      name: "Device Info"
+      name: $device_name Device Info

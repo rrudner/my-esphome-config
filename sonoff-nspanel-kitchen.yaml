@@ -115,22 +115,28 @@ binary_sensor: #left and right physical buttons, status state, and nextion scree
     pin:
       number: 27
       inverted: true
-    #on_click:
-    #  - light.toggle: light_2
+    on_click:
+      min_length: 50ms
+      max_length: 1000ms
+      then:
+        - homeassistant.service:
+            service: light.toggle
+            data:
+              entity_id: light.yeelight_color_0x36db4e2
 
   - platform: status
     name: $device_name Status
   
   - platform: nextion
-    name: $device_name Home Touch Screen Button
+    id: home_touch_button
     page_id: 0
     component_id: 19
     on_press:
       - light.toggle: light_1
     
   - platform: nextion
-    name: $device_name Sleep Touch Screen Button
-    page_id: 4
+    id: sleep_touch_button
+    page_id: 3 
     component_id: 3
     on_press:
       - light.turn_on: light_1
@@ -198,11 +204,11 @@ display: #screen settings
 sensor: #physical and virtual sensors
   - platform: debug
     free:
-      name: "Heap Free"
+      name: $device_name Heap Free
     block:
-      name: "Heap Max Block"
+      name: $device_name Heap Max Block
     loop_time:
-      name: "Loop Time"
+      name: $device_name Loop Time
 
   - platform: wifi_signal #wifi signal sensor for HA
     name: $device_name WiFi Signal
