@@ -40,8 +40,17 @@ uart:
 
 api:
   reboot_timeout: 0s
-  encryption: 
-    key: !secret encryption_key
+  # encryption: 
+  #   key: !secret encryption_key
+
+  services:
+    - service: led_turn_off
+      then:
+        - light.turn_on: led_1
+    
+    - service: led_turn_on
+      then:
+        - light.turn_off: led_1
 
 ota:
 
@@ -65,10 +74,14 @@ binary_sensor:
     on_press:
       - light.toggle: led_1
     on_click:
-      min_length: 50ms
+    - min_length: 50ms
       max_length: 350ms
       then:
         - switch.toggle: relay_1
+    - min_length: 5s
+      max_length: 15s
+      then:
+        - switch.turn_on: reboot
     on_release:
       - light.toggle: led_1
 
@@ -83,15 +96,16 @@ switch:
     icon: mdi:server-network
     restore_mode: ALWAYS_ON
 
-button:
   - platform: restart
+    id: reboot
     name: $device_name Restart
+    icon: mdi:restart
 
 light:
   - platform: status_led
     id: led_1
     pin: GPIO13
-    name: $device_name LED
+    #name: $device_name LED
     icon: mdi:led-variant-on
 
 sensor:

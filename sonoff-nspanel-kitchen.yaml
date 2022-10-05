@@ -41,8 +41,8 @@ uart: #screen handling
 
 api: #application programming interface settings, and other services 
   reboot_timeout: 0s
-  encryption: 
-    key: !secret encryption_key
+  # encryption: 
+  #   key: !secret encryption_key
   services:
     - service: play_rtttl #with this you can play rtttl melodies from HA
       variables:
@@ -107,27 +107,36 @@ binary_sensor: #left and right physical buttons, status state, and nextion scree
     pin:
       number: 14
       inverted: true
-    on_press:
-      - light.toggle: light_1
+    # on_press:
+    #   - light.toggle: light_1
+    on_click:
+      min_length: 5s
+      max_length: 15s
+      then:
+        - switch.turn_on: reboot
 
   - platform: gpio
     name: $device_name Right Button
     pin:
       number: 27
       inverted: true
-    on_click:
-      min_length: 50ms
-      max_length: 1000ms
+    on_press:
       then:
         - homeassistant.service:
             service: light.toggle
             data:
               entity_id: light.yeelight_color_0x36db4e2
+    on_click:
+      min_length: 5s
+      max_length: 15s
+      then:
+        - switch.turn_on: reboot
 
   - platform: status
     name: $device_name Status
   
   - platform: nextion
+    name: $device_name Home Touch Button
     id: home_touch_button
     page_id: 0
     component_id: 19
@@ -158,10 +167,6 @@ output: #relays and buzzer power output
   #  pin: 
   #    number: 19
 
-button: #restart button
-  - platform: restart
-    name: Restart $device_name
-
 light: #relay -> light
   - platform: binary
     id: light_1
@@ -186,6 +191,10 @@ switch: #screen power supply
       number: 4
       inverted: true
     restore_mode: ALWAYS_ON
+  - platform: restart
+    id: reboot
+    name: $device_name Restart
+    icon: mdi:restart
 
 display: #screen settings
   - platform: nextion

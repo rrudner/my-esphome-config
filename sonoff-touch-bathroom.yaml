@@ -35,8 +35,17 @@ debug:
 
 api:
   reboot_timeout: 0s
-  encryption: 
-    key: !secret encryption_key
+  # encryption: 
+  #   key: !secret encryption_key
+
+  services:
+    - service: led_turn_off
+      then:
+        - light.turn_on: led_1
+    
+    - service: led_turn_on
+      then:
+        - light.turn_off: led_1
 
 ota:
 
@@ -62,24 +71,31 @@ binary_sensor:
       - light.toggle: light_1
     on_release:
       - light.toggle: led_1
+    on_click:
+      min_length: 5s
+      max_length: 15s
+      then:
+        - switch.turn_on: reboot
 
   - platform: status
     name: $device_name Status
+
+switch:
+  - platform: restart
+    id: reboot
+    name: $device_name Restart
+    icon: mdi:restart
 
 output:
   - platform: gpio
     id: relay_1
     pin: GPIO12
 
-button:
-  - platform: restart
-    name: $device_name Restart
-
 light:
   - platform: status_led
     id: led_1
     pin: GPIO13
-    name: $device_name LED
+    #name: $device_name LED
     icon: mdi:led-variant-on
     
   - platform: binary

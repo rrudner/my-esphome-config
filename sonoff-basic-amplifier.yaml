@@ -2,9 +2,9 @@
 #Basic Settings
 #//////////////////////////////////////////////////////////////////////////////
 substitutions:
-  node_name: sonoff-basic-bedside
-  device_name: Bedside
-  device_ip: 10.0.0.194
+  node_name: sonoff-basic-amplifier
+  device_name: Amplifier
+  device_ip: 10.0.0.189
 
 esphome:
   name: $node_name
@@ -36,7 +36,7 @@ debug:
 api:
   reboot_timeout: 0s
   # encryption: 
-  #   # key: !secret encryption_key
+  #   key: !secret encryption_key
 
   services:
     - service: led_turn_off
@@ -74,7 +74,7 @@ binary_sensor:
     - min_length: 50ms
       max_length: 1000ms
       then:
-        - light.toggle: light_1
+        - switch.toggle: relay_1
     - min_length: 5s
       max_length: 15s
       then:
@@ -82,17 +82,19 @@ binary_sensor:
 
   - platform: status
     name: $device_name Status
-
+    
 switch:
+  - platform: gpio
+    id: relay_1
+    name: $device_name
+    pin: GPIO12
+    restore_mode: RESTORE_DEFAULT_OFF
+    icon: mdi:amplifier
+
   - platform: restart
     id: reboot
     name: $device_name Restart
     icon: mdi:restart
-
-output:
-  - platform: gpio
-    id: relay_1
-    pin: GPIO12
 
 light:
   - platform: status_led
@@ -100,26 +102,10 @@ light:
     pin: GPIO13
     #name: $device_name LED
     icon: mdi:led-variant-on
-    
-  - platform: binary
-    id: light_1
-    output: relay_1
-    name: $device_name Light
-    icon: mdi:lamp
-    restore_mode: ALWAYS_OFF
 
 sensor:
   - platform: wifi_signal
     name: $device_name WiFi Signal
-    update_interval: 60s
-
-  - platform: dht
-    pin: GPIO3
-    temperature:
-      name: $device_name Temperature
-    humidity:
-      name: $device_name Humidity
-    model: DHT22
     update_interval: 60s
 
   - platform: debug
