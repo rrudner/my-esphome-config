@@ -1,10 +1,8 @@
-#//////////////////////////////////////////////////////////////////////////////
-#Basic Settings
-#//////////////////////////////////////////////////////////////////////////////
 substitutions:
   node_name: sonoff-pow-r2-heater
   device_name: Heater
   device_ip: 10.0.0.187
+  sensor_name: bedside_temperature
 
 esphome:
   name: $node_name
@@ -56,9 +54,6 @@ time:
   - platform: homeassistant
     id: homeassistant_time
 
-#//////////////////////////////////////////////////////////////////////////////
-#Switch Settings
-#//////////////////////////////////////////////////////////////////////////////
 binary_sensor:
   - platform: gpio
     name: $device_name Button
@@ -69,11 +64,32 @@ binary_sensor:
         pullup: true
       inverted: true
     id: button_1
-    on_click:
-    - min_length: 50ms
-      max_length: 350ms
+    on_press:
       then:
+          - if:
+              condition:
+                lambda: 'return id(thermoheater).action == 0;'
+              then:
+              - lambda: |-
+                  auto call = id(thermoheater).make_call();
+                  call.set_mode("HEAT");
+                  call.perform();
+              else:
+              - lambda: |-
+                  auto call = id(thermoheater).make_call();
+                  call.set_mode("OFF");
+                  call.perform();
+            
+    on_click:
+    - min_length: 350ms
+      max_length: 1000ms
+      then:
+        - lambda: |-
+                  auto call = id(thermoheater).make_call();
+                  call.set_mode("OFF");
+                  call.perform();
         - switch.toggle: relay_1
+
     - min_length: 5s
       max_length: 15s
       then:
@@ -102,6 +118,10 @@ light:
     icon: mdi:led-variant-on
 
 sensor:
+  - platform: homeassistant
+    id: ${sensor_name}
+    entity_id: sensor.${sensor_name}
+
   - platform: wifi_signal
     name: $device_name WiFi Signal
     update_interval: 60s
@@ -146,3 +166,38 @@ text_sensor:
   - platform: debug
     device:
       name: $device_name Device Info
+
+climate:
+  - platform: thermostat
+    id: thermoheater
+    name: $device_name Thermostat
+    sensor: $sensor_name
+    visual:
+      min_temperature: 18
+      max_temperature: 25
+      temperature_step: 0.1
+    heat_overrun: 0.5
+    heat_deadband: 0.0
+    min_heating_off_time: 1s
+    min_heating_run_time: 1s
+    min_idle_time: 1s
+    heat_action:
+      - switch.turn_on: relay_1
+    idle_action:
+      - switch.turn_off: relay_1
+    preset:
+      - name: Home
+        default_target_temperature_low: 20
+      - name: Sleep
+        default_target_temperature_low: 19
+      - name: Away
+        default_target_temperature_low: 18
+    on_state:
+      then:
+          - if:
+              condition:
+                lambda: 'return id(thermoheater).action == 0;'
+              then:
+              - light.turn_on: led_1
+              else:
+              - light.turn_off: led_1
