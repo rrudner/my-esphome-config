@@ -5,3 +5,6 @@
 
 ## Slider Menu
 ![Screenshot](screenshots/slider_view.png)
+
+## Thermostat
+![Screenshot](screenshots/thermostat_view.png)

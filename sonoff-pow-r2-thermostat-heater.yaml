@@ -64,13 +64,27 @@ api:
                   call.set_mode("OFF");
                   call.perform();
 
-    - service: set_temp
+    - service: thermostat_set_temp
       variables:
         target_temp: float
       then:
         - lambda: |-
             auto call = id(thermoheater).make_call();
             call.set_target_temperature(target_temp);
+            call.perform();
+    
+    - service: thermostat_temp_up
+      then:
+        - lambda: |-
+            auto call = id(thermoheater).make_call();
+            call.set_target_temperature(id(thermoheater).target_temperature + 0.5);
+            call.perform();
+
+    - service: thermostat_temp_down
+      then:
+        - lambda: |-
+            auto call = id(thermoheater).make_call();
+            call.set_target_temperature(id(thermoheater).target_temperature - 0.5);
             call.perform();
             
 ota:

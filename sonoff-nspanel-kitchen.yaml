@@ -80,6 +80,9 @@ api: #application programming interface settings, and other services
         - script.execute: update_screen_precipitation_probability
         - script.execute: update_screen_precipitation
         - script.execute: set_weather_icon
+        - script.execute: update_screen_sun
+        - script.execute: update_screen_heater_target_temp
+        - script.execute: update_screen_thermostat_heater_state
         - rtttl.play: "twobits:d=4,o=5,b=220:c6,8g,8g,a,g,p,b,c6"
 
 ota: #enabling over-the-air updates (without authentication)
@@ -145,12 +148,42 @@ binary_sensor: #left and right physical buttons, status state, and nextion scree
     
   - platform: nextion
     id: sleep_touch_button
-    page_id: 3 
+    page_id: 4 
     component_id: 3
     on_press:
       - light.turn_on: light_1
       - rtttl.play: "pacman:d=4,o=5,b=112:32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32c6,32p,32c7,32p,32g6,32p,32e6,32p,32c7,32g6,16p,16e6,16p,32b,32p,32b6,32p,32f#6,32p,32d#6,32p,32b6,32f#6,16p,16d#6,16p,32d#6,32e6,32f6,32p,32f6,32f#6,32g6,32p,32g6,32g#6,32a6,32p,32b.6"
     
+  - platform: nextion
+    id: heater_target_temp_up
+    name: up
+    page_id: 3
+    component_id: 4
+    on_press:
+      then:
+        - homeassistant.service:
+            service: esphome.sonoff_pow_r2_heater_thermostat_temp_up
+
+  - platform: nextion
+    id: heater_target_temp_down
+    name: down
+    page_id: 3
+    component_id: 5
+    on_press:
+      then:
+        - homeassistant.service:
+            service: esphome.sonoff_pow_r2_heater_thermostat_temp_down
+
+  - platform: nextion
+    id: heater_thermostat_toggle
+    name: toggle
+    page_id: 3
+    component_id: 6
+    on_press:
+      then:
+        - homeassistant.service:
+            service: esphome.sonoff_pow_r2_heater_thermostat_toggle
+
 output: #relays and buzzer power output
   - platform: ledc
     id: buzzer_out
@@ -333,6 +366,15 @@ sensor: #physical and virtual sensors
               entity_id: light.yeelight_color_0x36db4e2
               brightness: !lambda return (int)x;
 
+  #thermostat
+  - platform: homeassistant
+    id: thermostat_heater_target_temp
+    entity_id: climate.heater_thermostat
+    attribute: temperature
+    on_value: 
+      then:
+        - script.execute: update_screen_heater_target_temp
+
 text_sensor:
   - platform: debug
     device:
@@ -348,6 +390,17 @@ text_sensor:
   - platform: homeassistant
     id: whereIsSun
     entity_id: sun.sun
+    on_value:
+      then:
+        - script.execute: update_screen_sun
+
+  #thermostat
+  - platform: homeassistant
+    id: thermostat_heater_state
+    entity_id: climate.heater_thermostat
+    on_value:
+      then:
+        - script.execute: update_screen_thermostat_heater_state
 
 script:
   - id: update_screen_device_temp
@@ -358,6 +411,7 @@ script:
   - id: update_screen_bedside_temp
     then:
       - lambda: id(disp).set_component_text_printf("home.bedside", "%.1f""\xb0""C   ""%.0f""%%", id(bedside_temperature).state, id(bedside_humidity).state);
+      - lambda: id(disp).set_component_text_printf("Down.tempin", "%.1f""\xb0""C", id(bedside_temperature).state);
 
   - id: update_screen_forecast_temp
     then:
@@ -488,3 +542,22 @@ script:
                                                                         lambda: id(disp).send_command_printf("home.iconWeather.pic=21");
                                                                       else:
                                                                         lambda: id(disp).send_command_printf("home.iconWeather.pic=23");
+  - id: update_screen_heater_target_temp
+    then:
+      - lambda: id(disp).set_component_text_printf("Down.thermtemp", "%.1f""\xb0""C", id(thermostat_heater_target_temp).state);
+
+  - id: update_screen_thermostat_heater_state
+    then:
+      - lambda: id(disp).set_component_text("Down.state", id(thermostat_heater_state).state.c_str());
+      - if:
+          condition:
+            lambda: return id(thermostat_heater_state).state == "off";
+          then:
+          - lambda: id(disp).set_component_font_color("Down.thermtemp", "65535");
+          else:
+          - lambda: id(disp).set_component_font_color("Down.thermtemp", "53547");
+
+      
+  - id: update_screen_sun
+    then:
+      - lambda: id(disp).set_component_text("home.sun", id(whereIsSun).state.c_str());
