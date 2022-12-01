@@ -48,6 +48,31 @@ api:
       then:
         - light.turn_off: led_1
 
+    - service: thermostat_toggle
+      then:
+          - if:
+              condition:
+                lambda: 'return id(thermoheater).action == 0;'
+              then:
+              - lambda: |-
+                  auto call = id(thermoheater).make_call();
+                  call.set_mode("HEAT");
+                  call.perform();
+              else:
+              - lambda: |-
+                  auto call = id(thermoheater).make_call();
+                  call.set_mode("OFF");
+                  call.perform();
+
+    - service: set_temp
+      variables:
+        target_temp: float
+      then:
+        - lambda: |-
+            auto call = id(thermoheater).make_call();
+            call.set_target_temperature(target_temp);
+            call.perform();
+            
 ota:
 
 time:
@@ -64,7 +89,9 @@ binary_sensor:
         pullup: true
       inverted: true
     id: button_1
-    on_press:
+    on_click:
+    - min_length: 50ms
+      max_length: 350ms
       then:
           - if:
               condition:
@@ -79,8 +106,6 @@ binary_sensor:
                   auto call = id(thermoheater).make_call();
                   call.set_mode("OFF");
                   call.perform();
-            
-    on_click:
     - min_length: 350ms
       max_length: 1000ms
       then:
