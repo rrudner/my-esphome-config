@@ -14,6 +14,7 @@ wifi:
   use_address: $device_ip
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  fast_connect: True
   reboot_timeout: 0s
   ap:
     ssid: $device_name Fallback Hotspot
@@ -63,6 +64,10 @@ binary_sensor:
     on_release:
       - light.toggle: led_1
     on_click:
+    - min_length: 50ms
+      max_length: 350ms
+      then:
+        - light.toggle: light_1
     - min_length: 350ms
       max_length: 1000ms
       then:
@@ -70,13 +75,6 @@ binary_sensor:
             service: light.toggle
             data:
               entity_id: light.kitchen_light_1
-
-
-    - min_length: 50ms
-      max_length: 350ms
-      then:
-        - light.toggle: light_1
-
     - min_length: 5s
       max_length: 15s
       then:

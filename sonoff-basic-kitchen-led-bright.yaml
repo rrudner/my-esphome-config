@@ -1,21 +1,21 @@
 substitutions:
-  node_name: sonoff-touch-bathroom
-  device_name: Bathroom
-  device_ip: 10.0.0.196
+  node_name: sonoff-basic-kitchen-led-bright
+  device_name: Kitchen Pow LED
+  device_ip: 10.0.0.185
 
 esphome:
   name: $node_name
   comment: $device_name
 
 esp8266:
-  board: esp8285
+  board: sonoff_basic
 
 wifi:
   use_address: $device_ip
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: True
-  reboot_timeout: 0s
+  reboot_timeout: 15min
   ap:
     ssid: $device_name Fallback Hotspot
     password: !secret wifi_ap_password
@@ -32,7 +32,7 @@ debug:
   update_interval: 120s
 
 api:
-  reboot_timeout: 0s
+  reboot_timeout: 15min
 
   services:
     - service: led_turn_off
@@ -61,11 +61,14 @@ binary_sensor:
     id: button_1
     on_press:
       - light.toggle: led_1
-      - light.toggle: light_1
     on_release:
       - light.toggle: led_1
     on_click:
-      min_length: 5s
+    - min_length: 50ms
+      max_length: 1000ms
+      then:
+        - light.toggle: light_1
+    - min_length: 5s
       max_length: 15s
       then:
         - switch.turn_on: reboot
@@ -94,7 +97,7 @@ light:
     id: light_1
     output: relay_1
     name: $device_name Light
-    icon: mdi:lightbulb-spot
+    icon: mdi:flashlight
     restore_mode: ALWAYS_OFF
 
 sensor:

@@ -1,7 +1,7 @@
 substitutions:
-  node_name: sonoff-touch-bathroom
-  device_name: Bathroom
-  device_ip: 10.0.0.196
+  node_name: sonoff-pow-r2-washing-machine
+  device_name: Washing-machine
+  device_ip: 10.0.0.187
 
 esphome:
   name: $node_name
@@ -15,7 +15,7 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: True
-  reboot_timeout: 0s
+  reboot_timeout: 15min
   ap:
     ssid: $device_name Fallback Hotspot
     password: !secret wifi_ap_password
@@ -27,12 +27,17 @@ web_server:
   port: 80
 
 logger:
+  baud_rate: 0
 
 debug:
   update_interval: 120s
 
+uart:
+  rx_pin: RX
+  baud_rate: 4800
+
 api:
-  reboot_timeout: 0s
+  reboot_timeout: 15min
 
   services:
     - service: led_turn_off
@@ -42,7 +47,7 @@ api:
     - service: led_turn_on
       then:
         - light.turn_off: led_1
-
+            
 ota:
 
 time:
@@ -59,13 +64,13 @@ binary_sensor:
         pullup: true
       inverted: true
     id: button_1
-    on_press:
-      - light.toggle: led_1
-      - light.toggle: light_1
-    on_release:
-      - light.toggle: led_1
     on_click:
-      min_length: 5s
+    - min_length: 50ms
+      max_length: 350ms
+      then:
+          - switch.toggle: relay_1
+
+    - min_length: 5s
       max_length: 15s
       then:
         - switch.turn_on: reboot
@@ -74,33 +79,55 @@ binary_sensor:
     name: $device_name Status
 
 switch:
+  - platform: gpio
+    id: relay_1
+    pin: GPIO12
+    name: $device_name
+    icon: mdi:washing-machine
+    restore_mode: ALWAYS_OFF
+
   - platform: restart
     id: reboot
     name: $device_name Restart
     icon: mdi:restart
-
-output:
-  - platform: gpio
-    id: relay_1
-    pin: GPIO12
 
 light:
   - platform: status_led
     id: led_1
     pin: GPIO13
     icon: mdi:led-variant-on
-    
-  - platform: binary
-    id: light_1
-    output: relay_1
-    name: $device_name Light
-    icon: mdi:lightbulb-spot
-    restore_mode: ALWAYS_OFF
 
 sensor:
+
   - platform: wifi_signal
     name: $device_name WiFi Signal
     update_interval: 60s
+    
+  - platform: cse7766
+    current:
+      id: current
+      name: $device_name Current
+    voltage:
+      id: voltage
+      name: $device_name Voltage
+    power:
+      id: power
+      name: $device_name Power
+    energy:
+      id: energy
+      filters:
+        - multiply: 0.001
+      unit_of_measurement: kWh
+      name: $device_name Energy
+    update_interval: 20s
+
+  - platform: total_daily_energy
+    id: daily_energy_usage
+    power_id: power
+    filters:
+      - multiply: 0.001
+    unit_of_measurement: kWh
+    name: $device_name Total Daily Usage
 
   - platform: debug
     free:
